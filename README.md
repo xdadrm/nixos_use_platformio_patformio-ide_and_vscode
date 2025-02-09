@@ -6,7 +6,21 @@ This guide outlines the steps necessary to set up a portable PlatformIO developm
 
 **Warning:** This method is dependent on a work-in-progress pull request and modifies packages from the Visual Studio Marketplace. Consequently, it may break in the future.
 
-For a quick setup:
+### Usage
+
+The quickest way to use this flake to work on a `platformio` project:
+
+1. Go to your project repo
+2. Enter the devshell:
+   ```
+   nix develop github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
+   ```
+3. `codium .`
+
+### Modify devshell
+
+If you need to modify something in the devshell:
+
 1. Clone the repository containing the `flake.nix` file.
 2. Run `nix develop --build`.
 3. Launch VSCodium using the provided `codium` function within the shell (Note: `pio` is also available and working).
@@ -17,7 +31,6 @@ cd nixos_use_platformio_patformio-ide_and_vscode
 nix develop --build
 codium .
 ```
-
 
 ## Detailed Guide
 
@@ -58,6 +71,7 @@ This command ensures that VSCodium uses the custom settings and the patched Plat
 #### 4. (Optional) Customize Environment Variables
 
 You can customize the following environment variables:
+
 - `PLATFORMIO_CORE_DIR`: Specifies the directory for PlatformIO core files (default: `$PWD/.platformio`).
 - `VSCODE_DATA_DIR`: Specifies the directory for VSCodium user data (default: `$PWD/.vscode-data`).
 
@@ -77,4 +91,3 @@ For more details, refer to the `flake.nix` file and its associated functions (`p
 ### Credits
 
 This guide builds upon [ppenguin's PR-237313](https://github.com/NixOS/nixpkgs/pull/237313) along with [delan's](https://github.com/NixOS/nixpkgs/pull/237313#issuecomment-1848198106) approach documented in the wiki: [PlatformIO Nix Wiki](https://nixos.wiki/index.php?title=Platformio&oldid=10699).
-
