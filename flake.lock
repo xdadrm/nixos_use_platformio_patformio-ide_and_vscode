@@ -2,18 +2,6 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 0,
-        "narHash": "sha256-GE04QAMRH3JcSdQcGc9VGA/1a0mfiXWf/sEqnD3rBC8=",
-        "path": "/nix/store/ra4vds979ckimqn7xhmi6a0kpyzzhim5-source",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs-platformio": {
-      "locked": {
         "lastModified": 1736689956,
         "narHash": "sha256-rvhMosg/QL/EbPsSfn3qzCKYs2ao9MVW/EHs+HCORfI=",
         "owner": "NixOS",
@@ -30,8 +18,7 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs",
-        "nixpkgs-platformio": "nixpkgs-platformio"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

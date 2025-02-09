@@ -2,15 +2,13 @@
   description = "Portable PlatformIO development environment with VSCodium";
 
   inputs = {
-    nixpkgs.url = "nixpkgs"; # Default nixpkgs
-    nixpkgs-platformio.url = "github:NixOS/nixpkgs/pull/237313/head"; # Specific nixpkgs revision for platformio
+    nixpkgs.url = "github:NixOS/nixpkgs/pull/237313/head"; # Specific nixpkgs revision for platformio
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      nixpkgs-platformio,
     }:
     let
       system = "x86_64-linux"; # Explicitly define the system
@@ -20,7 +18,7 @@
           (self: super: {
             # Override platformio-core to include pip in propagatedBuildInputs
             platformio-core =
-              (import nixpkgs-platformio { inherit system; }).platformio-core.overrideAttrs
+              (import nixpkgs{ inherit system; }).platformio-core.overrideAttrs
                 (old: {
                   propagatedBuildInputs = old.propagatedBuildInputs ++ [ self.python3Packages.pip ];
                 });
