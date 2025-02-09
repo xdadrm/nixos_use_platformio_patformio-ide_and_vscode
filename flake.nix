@@ -2,12 +2,16 @@
   description = "Portable PlatformIO development environment with VSCodium";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/pull/237313/head";  # Use a specific nixpkgs revision
+    nixpkgs.url = "github:NixOS/nixpkgs/pull/237313/head"; # Use a specific nixpkgs revision
   };
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+    }:
     let
-      system = "x86_64-linux";  # Explicitly define the system
+      system = "x86_64-linux"; # Explicitly define the system
       pkgs = import nixpkgs {
         inherit system;
         overlays = [
@@ -23,14 +27,18 @@
       # Fetch the PlatformIO VSCode extension from the marketplace
       platformioVsix = pkgs.fetchurl {
         url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/platformio/vsextensions/platformio-ide/3.3.4/vspackage";
-        sha256 = "sha256-CXIP6+ZxjLik9VxG7xrX53FXQBCGgTGhhskYAR32w6o=";
+        sha256 = "sha256-rYMCiy7y76sn5YrXJDneOyEpwBpgss6zEm2bWVoCVNc=";
       };
 
       # Patch the PlatformIO extension to remove dependencies and modify settings
       patchedExtension = pkgs.stdenv.mkDerivation {
         name = "platformio-ide-patched";
         src = platformioVsix;
-        buildInputs = [ pkgs.jq pkgs.unzip pkgs.gzip ];  # Tools needed for patching
+        buildInputs = [
+          pkgs.jq
+          pkgs.unzip
+          pkgs.gzip
+        ]; # Tools needed for patching
         unpackCmd = ''
           # First, decompress the .gz file
           gzip -d < $src > temp.zip
@@ -55,11 +63,13 @@
       };
 
       # Generate VSCodium settings to use the system's PlatformIO installation
-      vscodiumSettings = pkgs.writeText "settings.json" (builtins.toJSON {
+      vscodiumSettings = pkgs.writeText "settings.json" (
+        builtins.toJSON {
           "platformio-ide.useBuiltinPIOCore" = false;
           "platformio-ide.useBuiltinPython" = false;
           "platformio-ide.customPATH" = "${pkgs.platformio-core}/bin";
-      });
+        }
+      );
 
       # Script to set up VSCodium with the patched PlatformIO extension
       setupScript = pkgs.writeShellScriptBin "setup-platformio-ide" ''
@@ -75,12 +85,14 @@
       # Create an FHS environment with PlatformIO, Python, VSCodium, and Git
       platformioEnv = pkgs.buildFHSEnv {
         name = "platformio-env";
-        targetPkgs = pkgs: (with pkgs; [
-          platformio-core
-          (python3.withPackages (ps: [ ps.platformio ]))  # Python with PlatformIO package
-          vscodium
-          git
-        ]);
+        targetPkgs =
+          pkgs:
+          (with pkgs; [
+            platformio-core
+            (python3.withPackages (ps: [ ps.platformio ])) # Python with PlatformIO package
+            vscodium
+            git
+          ]);
         runScript = pkgs.writeScript "platformio-shell" ''
           export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$PWD/.platformio}"  # Set PlatformIO directory
           export VSCODE_DATA_DIR="''${VSCODE_DATA_DIR:-$PWD/.vscode-data}"  # Set VSCodium data directory
@@ -95,13 +107,15 @@
           exec bash
         '';
       };
-
-    in {
-      devShells.${system}.default = platformioEnv.env;  # Default dev shell is the PlatformIO environment
-      apps.${system}.default = {  # Default app is the setup script
+    in
+    {
+      devShells.${system}.default = platformioEnv.env; # Default dev shell is the PlatformIO environment
+      apps.${system}.default = {
+        # Default app is the setup script
         type = "app";
         program = "${setupScript}/bin/setup-platformio-ide";
       };
-      packages.${system}.default = patchedExtension;  # Default package is the patched extension
+      packages.${system}.default = patchedExtension; # Default package is the patched extension
     };
 }
+
