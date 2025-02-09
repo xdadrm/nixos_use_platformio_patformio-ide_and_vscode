@@ -2,13 +2,15 @@
   description = "Portable PlatformIO development environment with VSCodium";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/pull/237313/head"; # Use a specific nixpkgs revision
+    nixpkgs.url = "nixpkgs"; # Default nixpkgs
+    nixpkgs-platformio.url = "github:NixOS/nixpkgs/pull/237313/head"; # Specific nixpkgs revision for platformio
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      nixpkgs-platformio,
     }:
     let
       system = "x86_64-linux"; # Explicitly define the system
@@ -17,17 +19,19 @@
         overlays = [
           (self: super: {
             # Override platformio-core to include pip in propagatedBuildInputs
-            platformio-core = super.platformio-core.overrideAttrs (old: {
-              propagatedBuildInputs = old.propagatedBuildInputs ++ [ self.python3Packages.pip ];
-            });
+            platformio-core =
+              (import nixpkgs-platformio { inherit system; }).platformio-core.overrideAttrs
+                (old: {
+                  propagatedBuildInputs = old.propagatedBuildInputs ++ [ self.python3Packages.pip ];
+                });
           })
         ];
       };
 
       # Fetch the PlatformIO VSCode extension from the marketplace
       platformioVsix = pkgs.fetchurl {
-        url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/platformio/vsextensions/platformio-ide/3.3.4/vspackage";
-        sha256 = "sha256-rYMCiy7y76sn5YrXJDneOyEpwBpgss6zEm2bWVoCVNc=";
+        url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/platformio/vsextensions/platformio-ide/3.3.4/vspackage?targetPlatform=linux-x64";
+        sha256 = "sha256-Ri5TZDxSsW1cW33Rh+l/5Fxl23MNzFEjcFGLDx/xzT8=";
       };
 
       # Patch the PlatformIO extension to remove dependencies and modify settings
@@ -89,7 +93,7 @@
           pkgs:
           (with pkgs; [
             platformio-core
-            (python3.withPackages (ps: [ ps.platformio ])) # Python with PlatformIO package
+            (python3.withPackages (ps: [ platformio ])) # Python with PlatformIO package
             vscodium
             git
           ]);
@@ -118,4 +122,3 @@
       packages.${system}.default = patchedExtension; # Default package is the patched extension
     };
 }
-
