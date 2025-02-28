@@ -1,122 +1,197 @@
 {
-  description = "Portable PlatformIO development environment with VSCodium";
+  description = "PlatformIO Development Environment with VSCodium";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/pull/237313/head"; # Specific nixpkgs revision for platformio
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-    }:
+  outputs = { self, nixpkgs }:
     let
-      system = "x86_64-linux"; # Explicitly define the system
-      pkgs = import nixpkgs {
-        inherit system;
-        overlays = [
-          (self: super: {
-            # Override platformio-core to include pip in propagatedBuildInputs
-            platformio-core =
-              (import nixpkgs{ inherit system; }).platformio-core.overrideAttrs
-                (old: {
-                  propagatedBuildInputs = old.propagatedBuildInputs ++ [ self.python3Packages.pip ];
-                });
-          })
-        ];
-      };
+      system = "x86_64-linux";
+      pkgs = import <nixpkgs> { inherit system; };
 
-      # Fetch the PlatformIO VSCode extension from the marketplace
       platformioVsix = pkgs.fetchurl {
         url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/platformio/vsextensions/platformio-ide/3.3.4/vspackage?targetPlatform=linux-x64";
         sha256 = "sha256-Ri5TZDxSsW1cW33Rh+l/5Fxl23MNzFEjcFGLDx/xzT8=";
       };
 
-      # Patch the PlatformIO extension to remove dependencies and modify settings
       patchedExtension = pkgs.stdenv.mkDerivation {
         name = "platformio-ide-patched";
         src = platformioVsix;
-        buildInputs = [
-          pkgs.jq
-          pkgs.unzip
-          pkgs.gzip
-        ]; # Tools needed for patching
+        buildInputs = [ pkgs.jq pkgs.unzip pkgs.gzip ];
         unpackCmd = ''
-          # First, decompress the .gz file
           gzip -d < $src > temp.zip
-          # Then, unzip the resulting .zip file
           unzip temp.zip
           rm temp.zip
         '';
         buildPhase = ''
-          # Modify package.json to remove extension dependencies and disable built-in Python/PIO
           jq '.extensionDependencies = [] |
+              .["platformio-ide.useBuiltinPIOCore"].default = false |
               .["platformio-ide.useBuiltinPython"].default = false |
-              .["platformio-ide.useBuiltinPIOCore"].default = false' \
+              .["platformio-ide.forceSystemPIOCore"].default = true |
+              .["platformio-ide.forceSystemPython"].default = true' \
               package.json > package.json.new
           mv package.json.new package.json
         '';
         installPhase = ''
           cd ..
           mkdir -p $out
-          # Repackage the modified extension (will be in result)
           ${pkgs.zip}/bin/zip -r $out/platformio-ide.vsix .
         '';
       };
 
-      # Generate VSCodium settings to use the system's PlatformIO installation
-      vscodiumSettings = pkgs.writeText "settings.json" (
-        builtins.toJSON {
-          "platformio-ide.useBuiltinPIOCore" = false;
-          "platformio-ide.useBuiltinPython" = false;
-          "platformio-ide.customPATH" = "${pkgs.platformio-core}/bin";
-        }
-      );
-
-      # Script to set up VSCodium with the patched PlatformIO extension
-      setupScript = pkgs.writeShellScriptBin "setup-platformio-ide" ''
-        mkdir -p .vscode
-        cp ${vscodiumSettings} .vscode/settings.json
-        VSCODE_DATA_DIR="''${VSCODE_DATA_DIR:-$PWD/.vscode-data}"
-        mkdir -p "$VSCODE_DATA_DIR"
-        ${pkgs.vscodium}/bin/codium \
-          --user-data-dir "$VSCODE_DATA_DIR" \
-          --install-extension ${patchedExtension}/platformio-ide.vsix
+      platformioWrapper = pkgs.writeScriptBin "platformio" ''
+        #!/bin/sh
+        VENV_DIR="''${PLATFORMIO_VENV_DIR:-$HOME/.platformio/penv}"
+        . "$VENV_DIR/bin/activate"
+        exec ${pkgs.platformio}/bin/platformio "$@"
       '';
 
-      # Create an FHS environment with PlatformIO, Python, VSCodium, and Git
-      platformioEnv = pkgs.buildFHSEnv {
+      configureVSCodeSettings = ''
+        USER_CONFIG_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/VSCodium/User"
+        mkdir -p "$USER_CONFIG_DIR"
+        SETTINGS_FILE="$USER_CONFIG_DIR/settings.json"
+        if [ ! -f "$SETTINGS_FILE" ]; then
+          echo '{}' > "$SETTINGS_FILE"
+        fi
+        ${pkgs.jq}/bin/jq '. + {
+          "platformio-ide.useBuiltinPIOCore": true,
+          "platformio-ide.useBuiltinPython": false,
+          "platformio-ide.forceSystemPIOCore": false,
+          "platformio-ide.forceSystemPython": true,
+          "platformio-ide.customPATH": "$PATH"
+        }' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp"
+        if [ $? -eq 0 ]; then
+          mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+        else
+          rm -f "$SETTINGS_FILE.tmp"
+        fi
+      '';
+
+      fhsEnv = pkgs.buildFHSEnv {
         name = "platformio-env";
-        targetPkgs =
-          pkgs:
-          (with pkgs; [
-            platformio-core
-            (python3.withPackages (ps: [ platformio ])) # Python with PlatformIO package
-            vscodium
-            git
-          ]);
+        targetPkgs = pkgs: with pkgs; [
+          platformio
+          platformioWrapper
+          python312
+          git
+          vscodium
+          gcc
+          gdb
+          gnumake
+          udev
+          zlib
+          ncurses
+          stdenv.cc.cc.lib
+          glibc
+          libusb1
+          openssl
+          tio
+        ];
+        profile = ''
+          export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
+          export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
+          export PATH=${platformioWrapper}/bin:$PATH
+          export PATH=${pkgs.python312}/bin:$PATH
+        '';
         runScript = pkgs.writeScript "platformio-shell" ''
-          export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$PWD/.platformio}"  # Set PlatformIO directory
-          export VSCODE_DATA_DIR="''${VSCODE_DATA_DIR:-$PWD/.vscode-data}"  # Set VSCodium data directory
-
-          # Run the setup script to install the PlatformIO extension
-          ${setupScript}/bin/setup-platformio-ide
-
-          function codium() {
-            ${pkgs.vscodium}/bin/codium --user-data-dir "$VSCODE_DATA_DIR" "$@"
-          }
-
-          exec bash
+          export XDG_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+          export PATH=${pkgs.python312}/bin:${platformioWrapper}/bin:$PATH
+          export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
+          ${configureVSCodeSettings}
+          VSCODE_PORTABLE="''${VSCODE_PORTABLE:-$HOME/.vscode-portable}"
+          EXTENSION_DIR="''${VSCODE_PORTABLE}/extensions"
+          mkdir -p "$EXTENSION_DIR"
+          ${pkgs.vscodium}/bin/codium --install-extension ${patchedExtension}/platformio-ide.vsix
+          mkdir -p $HOME/.local/bin
+          ln -sf ${platformioWrapper}/bin/platformio $HOME/.local/bin/pio
+          echo "PlatformIO environment ready. PlatformIO Core: $(platformio --version)"
+          echo "Run 'codium .' to open VSCodium in current directory"
+          if [ -f $HOME/.platformio/penv/bin/activate ]; then
+             source $HOME/.platformio/penv/bin/activate
+          fi
+          PS1="Codium-PIO> "
+          exec bash --norc
         '';
       };
+
+      # Create a dedicated VSCodium launcher package that accepts arguments
+      codiumLauncher = pkgs.writeScriptBin "launch-codium" ''
+        #!/usr/bin/env bash
+        export XDG_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+        export PATH=${pkgs.python312}/bin:${platformioWrapper}/bin:$PATH
+        export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
+        ${configureVSCodeSettings}
+        VSCODE_PORTABLE="''${VSCODE_PORTABLE:-$HOME/.vscode-portable}"
+        EXTENSION_DIR="''${VSCODE_PORTABLE}/extensions"
+        mkdir -p "$EXTENSION_DIR"
+        ${pkgs.vscodium}/bin/codium --install-extension ${patchedExtension}/platformio-ide.vsix
+        mkdir -p $HOME/.local/bin
+        ln -sf ${platformioWrapper}/bin/platformio $HOME/.local/bin/pio
+        
+        # Initialize PlatformIO environment if needed
+        if [ ! -f $HOME/.platformio/penv/bin/activate ] && [ -x "$(command -v python3)" ]; then
+          echo "Initializing PlatformIO environment..."
+          python3 -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py)"
+        fi
+        
+        if [ -f $HOME/.platformio/penv/bin/activate ]; then
+          source $HOME/.platformio/penv/bin/activate
+        fi
+        
+        # If no arguments are provided, open the current directory
+        if [ $# -eq 0 ]; then
+          exec ${pkgs.vscodium}/bin/codium .
+        else
+          # Otherwise, pass all arguments to VSCodium
+          exec ${pkgs.vscodium}/bin/codium "$@"
+        fi
+      '';
+
+      # Create an FHS environment specifically for launching VSCodium
+      codiumFhsEnv = pkgs.buildFHSEnv {
+        name = "codium-launcher";
+        targetPkgs = pkgs: with pkgs; [
+          platformio
+          platformioWrapper
+          python312
+          git
+          vscodium
+          gcc
+          gdb
+          gnumake
+          udev
+          zlib
+          ncurses
+          stdenv.cc.cc.lib
+          glibc
+          libusb1
+          openssl
+          codiumLauncher
+          tio
+        ];
+        profile = ''
+          export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
+          export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
+          export PATH=${platformioWrapper}/bin:$PATH
+          export PATH=${pkgs.python312}/bin:$PATH
+        '';
+        # Pass all arguments received to the launch-codium script
+        runScript = pkgs.writeScript "codium-launch-wrapper" ''
+          exec ${codiumLauncher}/bin/launch-codium "$@"
+        '';
+      };
+
     in
     {
-      devShells.${system}.default = platformioEnv.env; # Default dev shell is the PlatformIO environment
-      apps.${system}.default = {
-        # Default app is the setup script
-        type = "app";
-        program = "${setupScript}/bin/setup-platformio-ide";
+      devShells.${system} = {
+        default = fhsEnv.env;
+        codium = codiumFhsEnv.env;
       };
-      packages.${system}.default = patchedExtension; # Default package is the patched extension
+
+      packages.${system} = {
+        default = fhsEnv;
+        platformioExtension = patchedExtension;
+        codium = codiumFhsEnv;
+      };
     };
 }

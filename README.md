@@ -1,93 +1,86 @@
-# User Guide: Portable PlatformIO Development Environment with VSCodium
+# Portable PlatformIO Development Environment with VSCodium
 
-## Summary
+This flake provides a working PlatformIO development environment using VSCodium on NixOS or other Nix-based systems. It leverages `nixpkgs` for Python and PlatformIO, ensuring compatibility while bypassing the versions provided by the PlatformIO extension.
 
-This guide outlines the steps necessary to set up a portable PlatformIO development environment using VSCodium on NixOS or other Nix-based systems. The configuration relies on `nixpkgs` for Python and PlatformIO, bypassing versions provided by the PlatformIO extension. This setup involves patching the PlatformIO VSCode extension to ensure compatibility.
+**Note:** This method involves patching the PlatformIO VSCode extension and using overrides in the Python environment. It may break in the future due to updates or changes in dependencies.
 
-**Warning:** This method is dependent on a work-in-progress pull request and modifies packages from the Visual Studio Marketplace. Consequently, it may break in the future.
+---
 
-### Usage
+## Quick Start
 
-The quickest way to use this flake to work on a `platformio` project:
-
-1. Go to your project repo
-2. Enter the devshell:
-   ```
-   nix develop github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
-   ```
-3. `codium .`
-
-### Modify devshell
-
-If you need to modify something in the devshell:
-
-1. Clone the repository containing the `flake.nix` file.
-2. Run `nix develop --build`.
-3. Launch VSCodium using the provided `codium` function within the shell (Note: `pio` is also available and working).
-
+### Option 1: Start VSCodium Directly
+Run the following command to launch VSCodium with the PlatformIO environment pre-configured. You can also pass options such as `--help` to VSCodium:
 ```bash
-git clone https://github.com/xdadrm/nixos_use_platformio_patformio-ide_and_vscode.git
-cd nixos_use_platformio_patformio-ide_and_vscode
-nix develop --build
-codium .
+nix run --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode#codium -- .
 ```
 
-## Detailed Guide
+### Option 2: Open a Development Shell
+To open a shell with VSCodium, PlatformIO (`pio`), and `tio` available, use:
+```bash
+nix develop --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
+```
+
+---
+
+## Customizing the Development Environment
+
+If you want to modify the development environment, follow these steps:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/xdadrm/nixos_use_platformio_patformio-ide_and_vscode.git
+   cd nixos_use_platformio_patformio-ide_and_vscode
+   ```
+
+2. Enter the development shell and launch VSCodium:
+   ```bash
+   nix develop --impure .#
+   codium .
+   ```
+
+---
+
+## Detailed Setup Guide
 
 ### Prerequisites
+- **NixOS**: Installed on an x86-64 system. Follow the [official installation guide](https://nixos.org/download.html).
+- **Git**: Required to clone the repository.
 
-- **NixOS**: on x86-64 [official installation guide](https://nixos.org/download.html).
-- **Git**: Install Git to clone the repository containing the `flake.nix` file.
+---
 
-### Setup Instructions
+### How It Works
 
-#### 1. Clone the Repository
+This setup allows you to use VSCodium with the PlatformIO IDE extension on NixOS. It modifies your existing VSCodium configuration by:
+- Adding the PlatformIO extension.
+- Adjusting settings of the PlatformIO extension to ensure compatibility.
 
-Clone the repository containing the `flake.nix` file to your local machine:
+Since the extension automatically downloads new PlatformIO Core versions, the setup is not "pure." Using the `--impure` flag allows the system to reuse the system's `nixpkgs` instead of downloading a specific version.
 
-```bash
-git clone <repository-url>
-cd <repository-directory>
-```
+**Important:** Two versions of PlatformIO will be installed:
+1. A native version provided by `nixpkgs`, available regardless of whether the PlatformIO IDE extension has downloaded PlatformIO Core.
+2. A version installed by the PlatformIO IDE extension (currently 1.6.17). The extension always installs the latest version, which may diverge from the native version.
 
-#### 2. Enter the Development Shell
+For consistency, this flake will prefer the PlatformIO IDE's version if available via the `PATH` variable.
 
-Use the following command to enter the development shell, which provides all the necessary tools (PlatformIO, Python, VSCodium, and Git):
-
-```bash
-nix develop --build
-```
-
-#### 3. Launch VSCodium
-
-After running the setup script, you can launch VSCodium with the following command:
-
-```bash
-codium
-```
-
-This command ensures that VSCodium uses the custom settings and the patched PlatformIO extension.
-
-#### 4. (Optional) Customize Environment Variables
-
-You can customize the following environment variables:
-
-- `PLATFORMIO_CORE_DIR`: Specifies the directory for PlatformIO core files (default: `$PWD/.platformio`).
-- `VSCODE_DATA_DIR`: Specifies the directory for VSCodium user data (default: `$PWD/.vscode-data`).
-
-For example:
-
-```bash
-export PLATFORMIO_CORE_DIR=/path/to/custom/platformio
-export VSCODE_DATA_DIR=/path/to/custom/vscode-data
-```
-
-### Conclusion
-
-This setup provides a portable, reproducible, and customizable PlatformIO development environment using VSCodium. By leveraging Nix, you can ensure that your development environment is consistent across different machines and projects.
-
-For more details, refer to the `flake.nix` file and its associated functions (`platformioEnv`, `patchedExtension`, `vscodiumSettings`, and `setupScript`).
+---
 
 ### Credits
 
-This guide builds upon [ppenguin's PR-237313](https://github.com/NixOS/nixpkgs/pull/237313) along with [delan's](https://github.com/NixOS/nixpkgs/pull/237313#issuecomment-1848198106) approach documented in the wiki: [PlatformIO Nix Wiki](https://nixos.wiki/index.php?title=Platformio&oldid=10699).
+This approach builds upon but does not depend on:
+- [ppenguin's PR-237313](https://github.com/NixOS/nixpkgs/pull/237313).
+- [delan's approach](https://github.com/NixOS/nixpkgs/pull/237313#issuecomment-1848198106) documented in the [PlatformIO Nix Wiki](https://nixos.wiki/index.php?title=Platformio&oldid=10699).
+
+---
+
+## Troubleshooting
+
+- **Conda Conflicts**: If you have Conda in your default shell (e.g., `.bashrc`), it may interfere with this flake, resulting in missing modules or other Python errors. Temporarily disable Conda initialization or use a clean shell environment.
+
+---
+
+## Contributing
+
+If you encounter issues or have suggestions for improvement, feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/xdadrm/nixos_use_platformio_patformio-ide_and_vscode).
+
+---
+
