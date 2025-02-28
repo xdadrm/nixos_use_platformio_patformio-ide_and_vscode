@@ -80,13 +80,9 @@ tio /dev/ttyACM0
 ```
 
 ### Configuring `tio`
-<<<<<<< HEAD
-You can customize `tio` behavior by creating a configuration file at `~/.config/tio/config`. Here’s an example configuration:
-=======
 You can customize `tio` behavior by creating a configuration file at `~/.config/tio/config`. This will then allow you to use `tio usb0` to connect to /dev/ttyUSB0.
 
  Here’s an example configuration:
->>>>>>> 0bd705d (doc: Add tio serial communication tool and configuration guide with permissions setup instructions.)
 
 ```ini
 [usb-devices]
