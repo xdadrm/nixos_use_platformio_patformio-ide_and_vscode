@@ -45,6 +45,7 @@ If you want to modify the development environment, follow these steps:
 ### Prerequisites
 - **NixOS**: Installed on an x86-64 system. Follow the [official installation guide](https://nixos.org/download.html).
 - **Git**: Required to clone the repository.
+- **Permissions** If you want to be able to communicate with your microcontrollers via serial ports - you'll have to add your user to the dialout group
 
 ---
 
@@ -64,6 +65,54 @@ For consistency, this flake will prefer the PlatformIO IDE's version if availabl
 
 ---
 
+## Using `tio` for Serial Communication
+
+`tio` is a simple serial communication tool included in this environment. It allows you to interact with microcontrollers connected via USB serial devices (e.g., `/dev/ttyUSB0` or `/dev/ttyACM0`).
+
+### Example Usage
+To connect to a serial device, use:
+```bash
+tio /dev/ttyUSB0
+```
+or
+```bash
+tio /dev/ttyACM0
+```
+
+### Configuring `tio`
+You can customize `tio` behavior by creating a configuration file at `~/.config/tio/config`. Here’s an example configuration:
+
+```ini
+[usb-devices]
+pattern = ^usb([0-9]*)
+device = /dev/ttyUSB%m1
+baudrate = 115200
+
+[acm-devices]
+pattern = ^acm([0-9]*)
+device = /dev/ttyACM%m1
+baudrate = 115200
+
+[forth]
+pattern = ^forth([0-9]*)
+device = /dev/ttyUSB%m1
+baudrate = 115200
+map = OCRNL,INLCRNL
+```
+
+This configuration:
+- Automatically detects USB (`/dev/ttyUSB*`) and ACM (`/dev/ttyACM*`) devices.
+- Sets a default baud rate of `115200`.
+- Maps specific serial port behaviors for devices matching the `forth` pattern.
+
+### Permissions for Serial Devices
+To communicate with serial devices, ensure your user is part of the `dialout` group:
+```bash
+sudo usermod -a -G dialout $USER
+```
+Log out and back in for the changes to take effect.
+
+---
 ### Credits
 
 This approach builds upon but does not depend on:
