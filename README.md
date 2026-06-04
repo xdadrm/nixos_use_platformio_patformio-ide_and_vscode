@@ -12,13 +12,13 @@ This flake provides a specialized FHS (Filesystem Hierarchy Standard) environmen
 
 ### Start VSCodium with PlatformIO/pio enabled, you can also pass options such as `--help` to VSCodium
 ```bash
-nix run --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode#codium -- .
+nix run github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode#codium -- .
 ```
 
 ### Enter a PlatformIO Shell
 Use this to run `pio` commands or launch the vscodium IDE manually. This also makes the `tio` serial terminal available.
 ```bash
-nix develop --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
+nix develop github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
 # Inside the shell:
 Codium-PIO> pio run
 Codium-PIO> codium .
@@ -32,13 +32,13 @@ If you use PlatformIO and vscodium every day, you may prefer to have the command
 
 ### Install the IDE Launcher
 ```bash
-nix profile add --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode#codium
+nix profile add github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode#codium
 ```
 *Usage:* `codium-launcher .`
 
 ### Install the Full Environment Wrapper
 ```bash
-nix profile add --impure github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
+nix profile add github:xdadrm/nixos_use_platformio_patformio-ide_and_vscode
 ```
 *Usage:*
 - **Interactive:** `platformio-env` (then run `pio`, `codium`, or `tio`)

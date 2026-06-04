@@ -6,7 +6,7 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
-      pkgs = import <nixpkgs> { inherit system; };
+      pkgs = nixpkgs.legacyPackages.${system};
 
       platformioVsix = pkgs.fetchurl {
         url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/platformio/vsextensions/platformio-ide/3.3.4/vspackage?targetPlatform=linux-x64";
