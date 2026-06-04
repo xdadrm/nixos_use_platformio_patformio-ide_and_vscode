@@ -1,8 +1,7 @@
 {
   description = "PlatformIO Development Environment with VSCodium";
 
-  inputs = {
-  };
+  inputs = { };
 
   outputs = { self, nixpkgs }:
     let
@@ -29,7 +28,7 @@
               .["platformio-ide.useBuiltinPython"].default = false |
               .["platformio-ide.forceSystemPIOCore"].default = true |
               .["platformio-ide.forceSystemPython"].default = true' \
-              package.json > package.json.new
+            package.json > package.json.new
           mv package.json.new package.json
         '';
         installPhase = ''
@@ -41,13 +40,13 @@
 
       platformioWrapper = pkgs.writeScriptBin "platformio" ''
         #!/bin/sh
-        VENV_DIR="''${PLATFORMIO_VENV_DIR:-$HOME/.platformio/penv}"
+        VENV_DIR="${"$"}{PLATFORMIO_VENV_DIR:-$HOME/.platformio/penv}"
         . "$VENV_DIR/bin/activate"
         exec ${pkgs.platformio}/bin/platformio "$@"
       '';
 
       configureVSCodeSettings = ''
-        USER_CONFIG_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/VSCodium/User"
+        USER_CONFIG_DIR="${"$"}{XDG_CONFIG_HOME:-$HOME/.config}/VSCodium/User"
         mkdir -p "$USER_CONFIG_DIR"
         SETTINGS_FILE="$USER_CONFIG_DIR/settings.json"
         if [ ! -f "$SETTINGS_FILE" ]; then
@@ -67,131 +66,121 @@
         fi
       '';
 
-      fhsEnv = pkgs.buildFHSEnv {
+      # ── default / dev-shell FHS env ─────────────────────────────────────────
+
+      fhsEnvRaw = pkgs.buildFHSEnv {
         name = "platformio-env";
         targetPkgs = pkgs: with pkgs; [
-          platformio
-          platformioWrapper
-          python312
-          git
-          vscodium
-          gcc
-          gdb
-          gnumake
-          udev
-          zlib
-          ncurses
-          stdenv.cc.cc.lib
-          glibc
-          libusb1
-          openssl
-          tio
+          platformio platformioWrapper python312 git vscodium
+          gcc gdb gnumake udev zlib ncurses stdenv.cc.cc.lib
+          glibc libusb1 openssl tio
         ];
         profile = ''
           export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
-          export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
+          export PLATFORMIO_CORE_DIR="${"$"}{PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
           export PATH=${platformioWrapper}/bin:$PATH
           export PATH=${pkgs.python312}/bin:$PATH
         '';
         runScript = pkgs.writeScript "platformio-shell" ''
-          export XDG_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+          #!/bin/sh
+          export XDG_DATA_HOME="${"$"}{XDG_DATA_HOME:-$HOME/.local/share}"
           export PATH=${pkgs.python312}/bin:${platformioWrapper}/bin:$PATH
           export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
           ${configureVSCodeSettings}
-          VSCODE_PORTABLE="''${VSCODE_PORTABLE:-$HOME/.vscode-portable}"
-          EXTENSION_DIR="''${VSCODE_PORTABLE}/extensions"
-          mkdir -p "$EXTENSION_DIR"
+          VSCODE_PORTABLE="${"$"}{VSCODE_PORTABLE:-$HOME/.vscode-portable}"
+          mkdir -p "${"$"}{VSCODE_PORTABLE}/extensions"
           ${pkgs.vscodium}/bin/codium --install-extension ${patchedExtension}/platformio-ide.vsix
           mkdir -p $HOME/.local/bin
           ln -sf ${platformioWrapper}/bin/platformio $HOME/.local/bin/pio
           echo "PlatformIO environment ready. PlatformIO Core: $(platformio --version)"
           echo "Run 'codium .' to open VSCodium in current directory"
           if [ -f $HOME/.platformio/penv/bin/activate ]; then
-             source $HOME/.platformio/penv/bin/activate
+            source $HOME/.platformio/penv/bin/activate
           fi
           PS1="Codium-PIO> "
           exec bash --norc
         '';
       };
 
-      # Create a dedicated VSCodium launcher package that accepts arguments
+      # Outer wrapper: drops ambient caps BEFORE bwrap is invoked
+      fhsEnv = pkgs.writeScriptBin "platformio-env" ''
+        #!/bin/sh
+        amb=$(grep '^CapAmb:' /proc/self/status | awk '{print $2}')
+        if [ -n "$amb" ] && [ "$amb" != "0000000000000000" ]; then
+          echo "Ambient capabilities detected, dropping before entering FHS env..."
+          exec ${pkgs.libcap}/bin/capsh --noamb -- -c 'exec "$0" "$@"' \
+            ${fhsEnvRaw}/bin/platformio-env "$@"
+        fi
+        exec ${fhsEnvRaw}/bin/platformio-env "$@"
+      '';
+
+      # ── codium launcher FHS env ──────────────────────────────────────────────
+
       codiumLauncher = pkgs.writeScriptBin "launch-codium" ''
         #!/usr/bin/env bash
-        export XDG_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+        export XDG_DATA_HOME="${"$"}{XDG_DATA_HOME:-$HOME/.local/share}"
         export PATH=${pkgs.python312}/bin:${platformioWrapper}/bin:$PATH
         export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
         ${configureVSCodeSettings}
-        VSCODE_PORTABLE="''${VSCODE_PORTABLE:-$HOME/.vscode-portable}"
-        EXTENSION_DIR="''${VSCODE_PORTABLE}/extensions"
-        mkdir -p "$EXTENSION_DIR"
+        VSCODE_PORTABLE="${"$"}{VSCODE_PORTABLE:-$HOME/.vscode-portable}"
+        mkdir -p "${"$"}{VSCODE_PORTABLE}/extensions"
         ${pkgs.vscodium}/bin/codium --install-extension ${patchedExtension}/platformio-ide.vsix
         mkdir -p $HOME/.local/bin
         ln -sf ${platformioWrapper}/bin/platformio $HOME/.local/bin/pio
-        
-        # Initialize PlatformIO environment if needed
         if [ ! -f $HOME/.platformio/penv/bin/activate ] && [ -x "$(command -v python3)" ]; then
           echo "Initializing PlatformIO environment..."
           python3 -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py)"
         fi
-        
         if [ -f $HOME/.platformio/penv/bin/activate ]; then
           source $HOME/.platformio/penv/bin/activate
         fi
-        
-        # If no arguments are provided, open the current directory
         if [ $# -eq 0 ]; then
           exec ${pkgs.vscodium}/bin/codium .
         else
-          # Otherwise, pass all arguments to VSCodium
           exec ${pkgs.vscodium}/bin/codium "$@"
         fi
       '';
 
-      # Create an FHS environment specifically for launching VSCodium
-      codiumFhsEnv = pkgs.buildFHSEnv {
+      codiumFhsEnvRaw = pkgs.buildFHSEnv {
         name = "codium-launcher";
         targetPkgs = pkgs: with pkgs; [
-          platformio
-          platformioWrapper
-          python312
-          git
-          vscodium
-          gcc
-          gdb
-          gnumake
-          udev
-          zlib
-          ncurses
-          stdenv.cc.cc.lib
-          glibc
-          libusb1
-          openssl
-          codiumLauncher
-          tio
+          platformio platformioWrapper python312 git vscodium
+          gcc gdb gnumake udev zlib ncurses stdenv.cc.cc.lib
+          glibc libusb1 openssl codiumLauncher tio
         ];
         profile = ''
           export PYTHONPATH=${pkgs.platformio}/lib/python3.12/site-packages:$PYTHONPATH
-          export PLATFORMIO_CORE_DIR="''${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
+          export PLATFORMIO_CORE_DIR="${"$"}{PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
           export PATH=${platformioWrapper}/bin:$PATH
           export PATH=${pkgs.python312}/bin:$PATH
         '';
-        # Pass all arguments received to the launch-codium script
-        runScript = pkgs.writeScript "codium-launch-wrapper" ''
+        runScript = pkgs.writeScript "codium-launch-inner" ''
+          #!/bin/sh
           exec ${codiumLauncher}/bin/launch-codium "$@"
         '';
       };
 
-    in
-    {
-      devShells.${system} = {
-        default = fhsEnv.env;
-        codium = codiumFhsEnv.env;
-      };
+      # Outer wrapper: drops ambient caps BEFORE bwrap is invoked
+      codiumFhsEnv = pkgs.writeScriptBin "codium-launcher" ''
+        #!/bin/sh
+        amb=$(grep '^CapAmb:' /proc/self/status | awk '{print $2}')
+        if [ -n "$amb" ] && [ "$amb" != "0000000000000000" ]; then
+          echo "Ambient capabilities detected, dropping before entering FHS env..."
+          exec ${pkgs.libcap}/bin/capsh --noamb -- -c 'exec "$0" "$@"' \
+            ${codiumFhsEnvRaw}/bin/codium-launcher "$@"
+        fi
+        exec ${codiumFhsEnvRaw}/bin/codium-launcher "$@"
+      '';
 
+    in {
+      devShells.${system} = {
+        default = fhsEnvRaw.env;
+        codium  = codiumFhsEnvRaw.env;
+      };
       packages.${system} = {
-        default = fhsEnv;
+        default            = fhsEnv;
         platformioExtension = patchedExtension;
-        codium = codiumFhsEnv;
+        codium             = codiumFhsEnv;
       };
     };
 }
